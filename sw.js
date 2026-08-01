@@ -9,7 +9,7 @@
 const CACHE_NAME = "sea-admin-v1";
 
 const STATIC_ASSETS = [
-  "/superadmin.html",
+  "/landing/",
   "/manifest.json",
   "/icons/icon-192.png",
   "/icons/icon-512.png",

@@ -977,7 +977,8 @@ updateFilterButtonStyles();
       utilization + "%";
   }
 
-// ---- Visual Availability Chart (V5 Executive Dashboard) ----
+// ---- Visual Availability Chart (Q2) ----
+// Pure client-side render from already-loaded allData - zero new API calls.
 function renderAvailabilityChart() {
   const dateInput = document.getElementById("chart-date");
   const date = dateInput.value || new Date().toLocaleDateString('sv-SE');
@@ -989,187 +990,37 @@ function renderAvailabilityChart() {
 
   const container = document.getElementById("availabilityChartBody");
 
-  // Build summary per court
-  const summary = {};
-  courts.forEach(c => {
-    summary[c] = {
-      available: 0,
-      booked: 0,
-      closed: 0,
-      disabled: 0
-    };
-  });
-
-  daySlots.forEach(slot => {
-    if (summary[slot.court_id]) {
-      summary[slot.court_id][slot.status]++;
-    }
-  });
-
-  // Calculate overall totals
-  let totalAvailable = 0, totalBooked = 0, totalClosed = 0, totalDisabled = 0;
-  courts.forEach(c => {
-    totalAvailable += summary[c].available;
-    totalBooked += summary[c].booked;
-    totalClosed += summary[c].closed;
-    totalDisabled += summary[c].disabled;
-  });
-  const totalSlots = totalAvailable + totalBooked + totalClosed + totalDisabled;
-  const overallOccupancy = totalSlots === 0 ? 0 : Math.round((totalBooked / totalSlots) * 100);
-
   if (times.length === 0 || courts.length === 0) {
     container.innerHTML = `<p class="text-muted text-center py-3">No slots found for ${date}</p>`;
     return;
   }
 
-  const courtColors = {
-    1: { primary: '#2563eb', bg: '#eff6ff' },
-    2: { primary: '#16a34a', bg: '#f0fdf4' },
-    3: { primary: '#f59e0b', bg: '#fffbeb' }
+  const statusStyle = {
+    available: { icon: "🟩", label: "Available" },
+    booked:    { icon: "🟥", label: "Booked" },
+    closed:    { icon: "🟨", label: "Closed" },
+    disabled:  { icon: "⬛", label: "Disabled" }
   };
 
-  // Build Court Cards HTML
-  let cardsHtml = `<div class="row g-3 mb-4">`;
-
-  courts.forEach(c => {
-    const s = summary[c];
-    const total = s.available + s.booked + s.closed + s.disabled;
-    const occupancy = total === 0 ? 0 : Math.round((s.booked / total) * 100);
-    const color = courtColors[c] || { primary: '#6b7280', bg: '#f9fafb' };
-
-    cardsHtml += `
-      <div class="col-6 col-md-3">
-        <div class="card shadow-sm border-0 h-100 court-card court-${c}">
-          <div class="card-body">
-            <h6 class="court-number">Court ${c}</h6>
-            <div class="occupancy-percent">${occupancy}%</div>
-            <div class="occupancy-label">Occupancy</div>
-            <div class="progress mt-2">
-              <div class="progress-bar" style="width:${occupancy}%"></div>
-            </div>
-            <div class="court-stats row g-0 text-center">
-              <div class="col">
-                <div class="stat-number text-success">${s.available}</div>
-                <div class="stat-label">Available</div>
-              </div>
-              <div class="col">
-                <div class="stat-number text-danger">${s.booked}</div>
-                <div class="stat-label">Booked</div>
-              </div>
-              <div class="col">
-                <div class="stat-number text-warning">${s.closed}</div>
-                <div class="stat-label">Closed</div>
-              </div>
-              <div class="col">
-                <div class="stat-number text-secondary">${s.disabled}</div>
-                <div class="stat-label">Disabled</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-  });
-
-  // Overall Summary Card
-  const progressColor = overallOccupancy > 70 ? 'bg-success' : (overallOccupancy > 40 ? 'bg-warning' : 'bg-danger');
-  cardsHtml += `
-    <div class="col-6 col-md-3">
-      <div class="overall-card">
-        <div class="overall-percent">${overallOccupancy}%</div>
-        <div class="overall-label">Overall Occupancy</div>
-        <div class="progress mt-2">
-          <div class="progress-bar ${progressColor}" style="width:${overallOccupancy}%"></div>
-        </div>
-        <div class="overall-stats row g-0 text-center">
-          <div class="col">
-            <div class="stat-number">${totalSlots}</div>
-            <div class="stat-label">Total Slots</div>
-          </div>
-          <div class="col">
-            <div class="stat-number text-success">${totalAvailable}</div>
-            <div class="stat-label">Available</div>
-          </div>
-          <div class="col">
-            <div class="stat-number text-danger">${totalBooked}</div>
-            <div class="stat-label">Booked</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-  cardsHtml += `</div>`;
-
-  // Build Availability Table
-  const statusDot = (status) => {
-    const map = {
-      'available': 'available',
-      'booked': 'booked',
-      'closed': 'closed',
-      'disabled': 'disabled'
-    };
-    return `<span class="status-dot ${map[status] || ''}" title="${status || ''}" onclick="${status ? `scrollToSlotRow(${slotId})` : ''}"></span>`;
-  };
-
-  let tableHtml = `
-    <div class="availability-table-wrapper">
-      <div class="table-responsive">
-        <table class="table table-bordered text-center align-middle mb-0">
-          <thead>
-            <tr>
-              <th style="min-width:70px;">Time</th>
-  `;
-
-  courts.forEach(c => {
-    tableHtml += `
-      <th>
-        <span class="court-label">Court ${c}</span>
-      </th>
-    `;
-  });
-
-  tableHtml += `
-            </tr>
-          </thead>
-          <tbody>
-  `;
+  let html = `<div class="table-responsive"><table class="table table-bordered text-center align-middle mb-2">`;
+  html += `<thead><tr><th>Time</th>${courts.map(c => `<th>Court ${c}</th>`).join("")}</tr></thead><tbody>`;
 
   times.forEach(t => {
-    tableHtml += `<tr><td>${t}</td>`;
+    html += `<tr><td class="text-nowrap">${t}</td>`;
     courts.forEach(c => {
       const slot = daySlots.find(s => (s.start_time || s.time) === t && Number(s.court_id) === c);
-      const status = slot ? slot.status : null;
-      const slotId = slot ? slot.id : null;
-      const dotClass = status ? `status-dot ${status}` : 'status-dot';
-      const clickAttr = slotId ? `onclick="scrollToSlotRow(${slotId})"` : '';
-      tableHtml += `
-        <td>
-          <span class="${dotClass}" ${clickAttr} title="${status || 'Empty'}"></span>
-        </td>
-      `;
+      const style = slot ? (statusStyle[slot.status] || { icon: "⬜", label: slot.status }) : { icon: "", label: "" };
+      html += `<td title="${style.label}" style="cursor:${slot ? 'pointer' : 'default'};font-size:1.3rem;" ${slot ? `onclick="scrollToSlotRow(${slot.id})"` : ""}>${style.icon}</td>`;
     });
-    tableHtml += `</tr>`;
+    html += `</tr>`;
   });
 
-  tableHtml += `
-          </tbody>
-        </table>
-      </div>
-    </div>
-  `;
+  html += `</tbody></table></div>`;
+  html += `<div class="d-flex gap-3 flex-wrap small text-muted">
+    <span>🟩 Available</span><span>🟥 Booked</span><span>🟨 Closed</span><span>⬛ Disabled</span>
+  </div>`;
 
-  // Legend
-  const legendHtml = `
-    <div class="d-flex gap-3 flex-wrap justify-content-center mt-3 small">
-      <span><span class="legend-dot available"></span><span class="legend-text">Available</span></span>
-      <span><span class="legend-dot booked"></span><span class="legend-text">Booked</span></span>
-      <span><span class="legend-dot closed"></span><span class="legend-text">Closed</span></span>
-      <span><span class="legend-dot disabled"></span><span class="legend-text">Disabled</span></span>
-      <span class="text-muted"><i class="bi bi-hand-index-thumb"></i> Click dot to jump to slot</span>
-    </div>
-  `;
-
-  container.innerHTML = cardsHtml + tableHtml + legendHtml;
+  container.innerHTML = html;
 }
 
 // Optional nice-to-have: clicking a chart cell jumps to that row in the main table
